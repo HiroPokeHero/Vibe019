@@ -282,7 +282,7 @@
           <!-- Drawing Stage Frame -->
           <div class="p-2 bg-white border-2 border-zinc-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] relative">
             <div class="relative w-[240px] h-[360px] flex items-center justify-center pixel-grid canvas-container">
-              <canvas id="drawing-canvas" width="240" height="360" class="border border-zinc-300 w-full h-full cursor-crosshair"></canvas>
+              <canvas id="drawing-canvas" class="border border-zinc-300 cursor-crosshair"></canvas>
             </div>
           </div>
 
@@ -828,12 +828,19 @@
     function redraw2DCanvas() {
       const isSlim = skinType === "alex";
       faceDim = getFaceDimensions(activePart, activeFace, isSlim);
+
+      // Define a fixed cell size (30px * 30px) so that the cells are strictly square (1:1 aspect ratio)
+      const cellW = 30;
+      const cellH = 30;
+
+      // Update canvas element dimensions and CSS style sizes dynamically
+      canvas.width = faceDim.w * cellW;
+      canvas.height = faceDim.h * cellH;
+      canvas.style.width = `${faceDim.w * cellW}px`;
+      canvas.style.height = `${faceDim.h * cellH}px`;
       
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.imageSmoothingEnabled = false;
-
-      const cellW = canvas.width / faceDim.w;
-      const cellH = canvas.height / faceDim.h;
 
       // Draw active body part face pixels
       for (let ly = 0; ly < faceDim.h; ly++) {
