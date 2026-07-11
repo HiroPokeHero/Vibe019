@@ -1069,8 +1069,9 @@
 
       facesOrder.forEach((face) => {
         const canvasFace = document.createElement("canvas");
-        const faceW = face === "top" || face === "bottom" ? dims.width : dims.depth;
-        const faceH = face === "top" || face === "bottom" ? dims.depth : dims.height;
+        const faceDim = getFaceDimensions(part, face, isSlim);
+        const faceW = faceDim.w;
+        const faceH = faceDim.h;
         
         canvasFace.width = faceW * 8;
         canvasFace.height = faceH * 8;
@@ -1255,8 +1256,9 @@
             const canvasFace = material.map.image;
             if (!canvasFace) return;
 
-            const faceW = face === "top" || face === "bottom" ? dims.width : dims.depth;
-            const faceH = face === "top" || face === "bottom" ? dims.depth : dims.height;
+            const faceDim = getFaceDimensions(part, face, isSlim);
+            const faceW = faceDim.w;
+            const faceH = faceDim.h;
             const faceCtx = canvasFace.getContext("2d");
             
             faceCtx.clearRect(0, 0, canvasFace.width, canvasFace.height);
