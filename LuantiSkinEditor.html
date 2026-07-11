@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マインクラフト & Luanti 3Dスキンエディター (簡易スタンドアロン版)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Minecraft-like styling buttons */
+    .block-shadow-orange {
+      box-shadow: 0 4px 0px 0px #C2410C;
+    }
+    .block-shadow-orange:active {
+      transform: translateY(4px);
+      box-shadow: 0 0px 0px 0px #C2410C;
+    }
+    .pixel-grid {
+      background-size: 20px 20px;
+      background-image: 
+        linear-gradient(to right, rgba(156, 163, 175, 0.15) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(156, 163, 175, 0.15) 1px, transparent 1px);
+    }
+    /* Simple custom canvas cursor styles */
+    .canvas-container canvas {
+      image-rendering: pixelated;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#F97316',
+              dark: '#111827',
+              accent: '#4ADE80',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 text-gray-800 selection:bg-brand-accent selection:text-brand-dark min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-zinc-900 border-b-4 border-orange-600 text-white py-4 px-6 shadow-md">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="bg-orange-600 p-2 text-white">
+          <i data-lucide="box" class="w-8 h-8"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold uppercase tracking-widest text-orange-500">
+            3D SKIN EDITOR
+          </h1>
+          <p class="text-xs text-gray-400 font-mono">
+            Minecraft (64x64) & Luanti (64x32) Standalone Edition
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs bg-zinc-800 text-gray-300 px-3 py-1.5 border border-zinc-700 font-bold">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 inline mr-1 text-green-400"></i> オフライン動作可能
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full">
+
+    <!-- LEFT COLUMN: 3D Preview (4 cols) -->
+    <section class="lg:col-span-4 flex flex-col gap-4">
+      <div class="bg-white border-2 border-zinc-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)] p-4 flex flex-col h-full">
+        <div class="flex items-center justify-between border-b-2 border-zinc-200 pb-3 mb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="eye" class="text-orange-600 w-5 h-5"></i>
+            <h2 class="font-extrabold text-sm tracking-wider uppercase">3Dリアルタイムプレビュー</h2>
+          </div>
+          <!-- Outer layer toggle -->
+          <label class="flex items-center gap-2 cursor-pointer text-xs font-bold">
+            <input type="checkbox" id="toggle-outer" checked class="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+            <span>アウター(重ね着)表示</span>
+          </label>
+        </div>
+
+        <!-- 3D Canvas Stage -->
+        <div class="relative bg-zinc-950 flex-1 min-h-[350px] border-2 border-zinc-800 flex items-center justify-center overflow-hidden">
+          <div id="three-container" class="w-full h-full absolute inset-0 cursor-grab active:cursor-grabbing"></div>
+          
+          <!-- Animation and Controls Overlay -->
+          <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-zinc-900/90 border border-zinc-700 p-2 text-white">
+            <div class="flex items-center gap-2">
+              <button id="btn-play-pause" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white cursor-pointer" title="アニメーション再生/一時停止">
+                <i data-lucide="pause" id="play-icon" class="w-4 h-4"></i>
+              </button>
+              <button id="btn-reset-cam" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white cursor-pointer" title="カメラリセット">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              </button>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono text-gray-400">ANIM:</span>
+              <select id="select-anim" class="bg-zinc-800 text-xs border border-zinc-700 px-2 py-1 outline-none text-white font-bold cursor-pointer">
+                <option value="walk">歩行 (Walk)</option>
+                <option value="run">走行 (Run)</option>
+                <option value="wave">手を振る (Wave)</option>
+                <option value="stand">直立 (Stand)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 flex gap-2">
+          <div class="flex-1 bg-zinc-50 border border-zinc-200 p-2.5 flex items-center gap-2">
+            <div class="bg-orange-100 p-1">
+              <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-orange-600"></i>
+            </div>
+            <p class="text-[10px] text-zinc-500 leading-tight">
+              3Dプレビューはドラッグで回転、ホイールでズーム可能です。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: 2D Editor, Palettes, Layers, Formats (8 cols) -->
+    <section class="lg:col-span-8 flex flex-col gap-4">
+      
+      <!-- Format and Utility Bar -->
+      <div class="bg-white border-2 border-zinc-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)] p-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          
+          <!-- Format Switcher -->
+          <div class="flex items-center gap-3">
+            <div class="bg-zinc-800 text-white p-1.5">
+              <i data-lucide="file-type-2" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <span class="text-xs text-zinc-500 block font-bold font-mono">SKIN FORMAT</span>
+              <div class="flex bg-zinc-100 p-0.5 border border-zinc-300">
+                <button id="format-minecraft" class="px-3 py-1 text-xs font-bold transition-all bg-orange-500 text-white">
+                  Minecraft (64x64)
+                </button>
+                <button id="format-luanti" class="px-3 py-1 text-xs font-bold transition-all text-zinc-600 hover:text-zinc-800">
+                  Luanti / Minetest (64x32)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Model Type Switcher -->
+          <div class="flex items-center gap-3">
+            <div class="bg-zinc-800 text-white p-1.5">
+              <i data-lucide="users" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <span class="text-xs text-zinc-500 block font-bold font-mono">MODEL STYLE</span>
+              <div class="flex bg-zinc-100 p-0.5 border border-zinc-300">
+                <button id="model-steve" class="px-3 py-1 text-xs font-bold transition-all bg-zinc-800 text-white">
+                  Steve (4px腕)
+                </button>
+                <button id="model-alex" class="px-3 py-1 text-xs font-bold transition-all text-zinc-600 hover:text-zinc-800">
+                  Alex (3px腕)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Undo/Redo & Utility Actions -->
+          <div class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+            <button id="btn-undo" disabled class="p-2 bg-white hover:bg-zinc-50 border-2 border-zinc-800 text-zinc-800 disabled:opacity-40 disabled:hover:bg-white cursor-pointer transition-all" title="元に戻す (Ctrl+Z)">
+              <i data-lucide="undo" class="w-4 h-4"></i>
+            </button>
+            <button id="btn-redo" disabled class="p-2 bg-white hover:bg-zinc-50 border-2 border-zinc-800 text-zinc-800 disabled:opacity-40 disabled:hover:bg-white cursor-pointer transition-all" title="やり直す (Ctrl+Y)">
+              <i data-lucide="redo" class="w-4 h-4"></i>
+            </button>
+            <button id="btn-clear-face" class="px-3 py-2 text-xs font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-2 border-zinc-800 cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 面をクリア
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Format Badge Message -->
+        <div class="mt-3 p-2 border border-orange-200 bg-orange-50 text-[11px] text-orange-800 font-medium flex items-center gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-orange-600 shrink-0"></i>
+          <span id="format-hint">Minecraft 1.8+ 互換：重ね着レイヤーを含むすべての面を個別に描画・編集可能です。</span>
+        </div>
+      </div>
+
+      <!-- Grid Editor & Panel (Main Workspace block) -->
+      <div class="bg-white border-2 border-zinc-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)] grid grid-cols-1 md:grid-cols-12 overflow-hidden">
+        
+        <!-- Part & Face & Layer Selectors (Left 3 cols) -->
+        <div class="md:col-span-3 border-r-2 border-b-2 md:border-b-0 border-zinc-800 bg-zinc-50 p-4 flex flex-col gap-4">
+          
+          <!-- Layer selector -->
+          <div>
+            <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-1.5 font-mono">編集レイヤー</label>
+            <div class="grid grid-cols-2 gap-1">
+              <button id="layer-inner" class="py-1.5 px-2 text-xs font-bold border-2 border-zinc-800 bg-zinc-800 text-white cursor-pointer">
+                インナー
+              </button>
+              <button id="layer-outer" class="py-1.5 px-2 text-xs font-bold border-2 border-zinc-300 bg-white text-zinc-600 hover:border-zinc-800 cursor-pointer">
+                アウター
+              </button>
+            </div>
+          </div>
+
+          <!-- Body Part selection list -->
+          <div>
+            <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-1.5 font-mono">編集パーツ</label>
+            <div class="flex flex-col gap-1" id="part-selector-list">
+              <button data-part="head" class="part-btn text-left py-1.5 px-3 text-xs font-bold border-2 border-zinc-800 bg-orange-500 text-white flex items-center justify-between">
+                <span>頭 (Head)</span>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+              <button data-part="torso" class="part-btn text-left py-1.5 px-3 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100 flex items-center justify-between">
+                <span>胴体 (Torso)</span>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+              <button data-part="right_arm" class="part-btn text-left py-1.5 px-3 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100 flex items-center justify-between">
+                <span id="label-right-arm">右腕 (Right Arm)</span>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+              <button data-part="left_arm" id="part-btn-left-arm" class="part-btn text-left py-1.5 px-3 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100 flex items-center justify-between">
+                <span>左腕 (Left Arm)</span>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+              <button data-part="right_leg" class="part-btn text-left py-1.5 px-3 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100 flex items-center justify-between">
+                <span id="label-right-leg">右足 (Right Leg)</span>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+              <button data-part="left_leg" id="part-btn-left-leg" class="part-btn text-left py-1.5 px-3 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100 flex items-center justify-between">
+                <span>左足 (Left Leg)</span>
+                <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Face selection matrix -->
+          <div>
+            <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-1.5 font-mono">編集面 (Face)</label>
+            <div class="grid grid-cols-2 gap-1" id="face-selector-grid">
+              <button data-face="front" class="face-btn py-1.5 px-2 text-xs font-bold border-2 border-zinc-800 bg-zinc-200 text-zinc-800">正面 (Front)</button>
+              <button data-face="back" class="face-btn py-1.5 px-2 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100">背面 (Back)</button>
+              <button data-face="left" class="face-btn py-1.5 px-2 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100">左面 (Left)</button>
+              <button data-face="right" class="face-btn py-1.5 px-2 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100">右面 (Right)</button>
+              <button data-face="top" class="face-btn py-1.5 px-2 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100">上面 (Top)</button>
+              <button data-face="bottom" class="face-btn py-1.5 px-2 text-xs font-semibold border-2 border-transparent hover:bg-zinc-100">下面 (Bottom)</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Canvas Pixel Grid (Middle 5 cols) -->
+        <div class="md:col-span-5 p-4 flex flex-col items-center justify-center border-r-2 border-zinc-800 bg-zinc-100">
+          <div class="text-[10px] font-black text-zinc-500 tracking-wider mb-2 uppercase font-mono" id="canvas-title">
+            頭 - 正面 (8 x 8)
+          </div>
+          
+          <!-- Drawing Stage Frame -->
+          <div class="p-2 bg-white border-2 border-zinc-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] relative">
+            <div class="relative w-[240px] h-[360px] flex items-center justify-center pixel-grid canvas-container">
+              <canvas id="drawing-canvas" width="240" height="360" class="border border-zinc-300 w-full h-full cursor-crosshair"></canvas>
+            </div>
+          </div>
+
+          <div class="mt-3 flex items-center gap-1.5">
+            <button id="btn-fill-all" class="px-2.5 py-1 text-[10px] font-bold bg-zinc-200 hover:bg-zinc-300 border border-zinc-400 flex items-center gap-1 cursor-pointer">
+              <i data-lucide="paint-bucket" class="w-3 h-3"></i> 全て塗りつぶし
+            </button>
+            <button id="btn-clear-all" class="px-2.5 py-1 text-[10px] font-bold bg-zinc-200 hover:bg-zinc-300 border border-zinc-400 flex items-center gap-1 cursor-pointer">
+              <i data-lucide="eraser" class="w-3 h-3"></i> 全消去 (透明化)
+            </button>
+          </div>
+        </div>
+
+        <!-- Drawing Tools & Palettes (Right 4 cols) -->
+        <div class="md:col-span-4 p-4 flex flex-col gap-4 bg-zinc-50">
+          
+          <!-- Tools selectors -->
+          <div>
+            <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-1.5 font-mono">描画ツール</label>
+            <div class="grid grid-cols-5 gap-1" id="tool-selector">
+              <button data-tool="pencil" class="tool-btn p-2 border-2 border-zinc-800 bg-orange-500 text-white cursor-pointer" title="ペン (Pencil)">
+                <i data-lucide="paintbrush" class="w-4 h-4 mx-auto"></i>
+              </button>
+              <button data-tool="noise" class="tool-btn p-2 border-2 border-transparent text-zinc-600 hover:bg-zinc-200 cursor-pointer" title="ノイズペン (立体感を出す微小な質感ノイズ)">
+                <i data-lucide="sparkles" class="w-4 h-4 mx-auto"></i>
+              </button>
+              <button data-tool="bucket" class="tool-btn p-2 border-2 border-transparent text-zinc-600 hover:bg-zinc-200 cursor-pointer" title="塗りつぶし (Fill)">
+                <i data-lucide="paint-bucket" class="w-4 h-4 mx-auto"></i>
+              </button>
+              <button data-tool="dropper" class="tool-btn p-2 border-2 border-transparent text-zinc-600 hover:bg-zinc-200 cursor-pointer" title="スポイト (Color Dropper)">
+                <i data-lucide="pipette" class="w-4 h-4 mx-auto"></i>
+              </button>
+              <button data-tool="eraser" class="tool-btn p-2 border-2 border-transparent text-zinc-600 hover:bg-zinc-200 cursor-pointer" title="消しゴム (Eraser)">
+                <i data-lucide="eraser" class="w-4 h-4 mx-auto"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom Color Picker -->
+          <div>
+            <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-1.5 font-mono">カラー選択 (Color)</label>
+            <div class="flex gap-2">
+              <div class="w-10 h-10 border-2 border-zinc-800 flex-shrink-0 relative overflow-hidden" id="color-preview-box" style="background-color: #3b82f6;">
+                <input type="color" id="input-color-picker" value="#3b82f6" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+              </div>
+              <div class="flex-1">
+                <input type="text" id="hex-color-input" value="#3B82F6" class="w-full px-3 py-2 text-xs font-mono font-bold border-2 border-zinc-800 uppercase bg-white outline-none focus:border-orange-500">
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Preset palettes -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 font-mono">マイクラ配色パレット</label>
+              <select id="preset-palette-select" class="text-[10px] bg-zinc-200 border border-zinc-300 px-1 py-0.5 font-bold outline-none cursor-pointer">
+                <option value="steve">Steve クラシック</option>
+                <option value="neon">サイバーネオン</option>
+                <option value="pastel">メルヘンパステル</option>
+                <option value="monochrome">モノクロ / 金属</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-6 gap-1" id="preset-palette-colors">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Recent Colors -->
+          <div>
+            <label class="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-1.5 font-mono">最近使った色 (History)</label>
+            <div class="grid grid-cols-6 gap-1" id="recent-palette-colors">
+              <div class="w-full aspect-square border border-zinc-300 bg-transparent"></div>
+              <div class="w-full aspect-square border border-zinc-300 bg-transparent"></div>
+              <div class="w-full aspect-square border border-zinc-300 bg-transparent"></div>
+              <div class="w-full aspect-square border border-zinc-300 bg-transparent"></div>
+              <div class="w-full aspect-square border border-zinc-300 bg-transparent"></div>
+              <div class="w-full aspect-square border border-zinc-300 bg-transparent"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Import / Export Section (Bottom 2D Editor Area) -->
+      <div class="bg-white border-2 border-zinc-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)] p-6">
+        <h3 class="font-extrabold text-sm tracking-wider uppercase mb-4 flex items-center gap-2">
+          <i data-lucide="import-export" class="text-orange-600 w-5 h-5"></i>
+          スキンファイルのインポート＆エクスポート (PNG)
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Drop & Import Zone -->
+          <div id="drop-zone" class="border-2 border-dashed border-zinc-300 hover:border-zinc-500 bg-zinc-50/50 p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[140px] relative transition-all">
+            <i data-lucide="upload-cloud" class="text-zinc-400 w-8 h-8 mb-2"></i>
+            <span class="text-xs font-bold text-zinc-700 block mb-1">ここにスキン画像(PNG)をドラッグ＆ドロップ</span>
+            <span class="text-[10px] text-zinc-400 font-mono">またはクリックしてファイルを選択</span>
+            <input type="file" id="import-file" accept="image/png" class="hidden">
+          </div>
+
+          <!-- Download Options -->
+          <div class="flex flex-col justify-between gap-4">
+            <div class="bg-zinc-50 border border-zinc-200 p-3">
+              <div class="text-xs font-bold text-zinc-700 mb-1 flex items-center gap-1.5">
+                <i data-lucide="download" class="w-4 h-4 text-green-500"></i>
+                保存されるファイル
+              </div>
+              <p class="text-[11px] text-zinc-500 leading-relaxed" id="export-desc">
+                Minecraft (64x64) 形式で保存されます。全ての重ね着レイヤーが保存され、標準のMinecraftでそのまま使用可能です。
+              </p>
+            </div>
+            
+            <button id="btn-export-png" class="w-full py-3 bg-brand-orange hover:bg-orange-600 text-white font-extrabold text-sm uppercase tracking-wider block-shadow-orange flex items-center justify-center gap-2 border-2 border-zinc-900 cursor-pointer">
+              <i data-lucide="file-down" class="w-4 h-4"></i>
+              スキンをPNGでダウンロード / DOWNLOAD PNG
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-zinc-900 text-gray-400 py-6 px-4 text-center text-xs mt-auto border-t border-zinc-800">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <p class="font-mono">© 2026 3D Minecraft & Luanti Skin Editor Standalone</p>
+      <div class="flex gap-4">
+        <span class="text-gray-500 font-bold">100% Client-Side Pure HTML App</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Application Logic & Scripts -->
+  <script>
+    // --- APP CONSTANTS & CORE CONFIG ---
+    const PART_DIMENSIONS = {
+      head: { width: 8, height: 8, depth: 8 },
+      torso: { width: 8, height: 12, depth: 4 },
+      right_arm: { width: 4, height: 12, depth: 4 },
+      left_arm: { width: 4, height: 12, depth: 4 },
+      right_leg: { width: 4, height: 12, depth: 4 },
+      left_leg: { width: 4, height: 12, depth: 4 }
+    };
+
+    const PRESET_PALETTES = {
+      steve: [
+        "#1A1A1A", "#533722", "#845F42", "#C68E62", "#EAA775", "#F7CBB0",
+        "#1B5E20", "#4CAF50", "#81C784", "#2E7D32", "#1976D2", "#42A5F5",
+        "#FFFFFF", "#B0BEC5", "#78909C", "#37474F", "#000000", "#795548",
+        "#FFEB3B", "#FFC107", "#FF9800", "#F44336", "#E91E63", "#9C27B0"
+      ],
+      neon: [
+        "#FF0055", "#FF5500", "#FFCC00", "#33FF00", "#00FFCC", "#0099FF",
+        "#9900FF", "#FF00FF", "#111111", "#222222", "#444444", "#888888",
+        "#FFFFFF", "#FF3366", "#33FF99", "#33CCFF", "#FFFF66", "#FF99FF",
+        "#1A0A2A", "#2E1A47", "#4A2A6B", "#8C52FF", "#5CE1E6", "#FF66C4"
+      ],
+      pastel: [
+        "#FFB7B2", "#FFDAC1", "#E2F0CB", "#B5EAD7", "#C7CEEA", "#FFC6FF",
+        "#FFE5EC", "#FFC2D1", "#FF91AF", "#E8A598", "#D291BC", "#957DAD",
+        "#F4F1DE", "#E07A5F", "#3D405B", "#81B29A", "#F2CC8F", "#EDF2F4",
+        "#A8DADC", "#457B9D", "#1D3557", "#E63946", "#F1FAEE", "#F5E6E8"
+      ],
+      monochrome: [
+        "#FFFFFF", "#F5F5F5", "#E5E5E5", "#D4D4D4", "#A3A3A3", "#737373",
+        "#525252", "#404040", "#262626", "#171717", "#0A0A0A", "#000000",
+        "#DFE1E5", "#BAC0C6", "#9099A3", "#6E7781", "#4B535D", "#2F363D",
+        "#FFEAA7", "#FAB1A0", "#FFEAA7", "#DFE6E9", "#636E72", "#2D3436"
+      ]
+    };
+
+    // Body parts names mapping
+    const partLabels = {
+      head: "頭 (Head)",
+      torso: "胴体 (Torso)",
+      right_arm: "右腕 (Right Arm)",
+      left_arm: "左腕 (Left Arm)",
+      right_leg: "右足 (Right Leg)",
+      left_leg: "左足 (Left Leg)"
+    };
+
+    const faceLabels = {
+      front: "正面 (Front)",
+      back: "背面 (Back)",
+      left: "左面 (Left)",
+      right: "右面 (Right)",
+      top: "上面 (Top)",
+      bottom: "下面 (Bottom)"
+    };
+
+    // --- APPLICATION STATE ---
+    let skinData = Array(4096).fill(null);
+    let skinType = "steve"; // steve or alex
+    let skinFormat = "minecraft"; // minecraft or luanti
+    let activeLayer = "inner"; // inner or outer
+    let activePart = "head";
+    let activeFace = "front";
+    let activeTool = "pencil";
+    let currentColor = "#845F42";
+    let showOuterLayer = true;
+
+    // History state stacks
+    let undoStack = [];
+    let redoStack = [];
+
+    // Recent colors list
+    let recentColors = ["#1A1A1A", "#845F42", "#C68E62", "#4CAF50", "#1976D2", "#FFFFFF"];
+
+    // Face dimension accessor
+    function getFaceDimensions(part, face, isSlim) {
+      const dim = { ...PART_DIMENSIONS[part] };
+      if (isSlim && (part === "right_arm" || part === "left_arm")) {
+        dim.width = 3;
+      }
+      if (face === "top" || face === "bottom") {
+        return { w: dim.width, h: dim.depth };
+      } else if (face === "left" || face === "right") {
+        return { w: dim.depth, h: dim.height };
+      } else {
+        return { w: dim.width, h: dim.height };
+      }
+    }
+
+    // Coordinates mapping logic
+    function getGlobalCoords(part, face, layer, isSlim, lx, ly) {
+      const w = isSlim && (part === "right_arm" || part === "left_arm") ? 3 : 4;
+
+      if (part === "head") {
+        const ox = layer === "inner" ? 0 : 32;
+        const oy = 0;
+        switch (face) {
+          case "top": return { x: ox + 8 + lx, y: oy + 0 + ly };
+          case "bottom": return { x: ox + 16 + lx, y: oy + 0 + ly };
+          case "right": return { x: ox + 0 + lx, y: oy + 8 + ly };
+          case "front": return { x: ox + 8 + lx, y: oy + 8 + ly };
+          case "left": return { x: ox + 16 + lx, y: oy + 8 + ly };
+          case "back": return { x: ox + 24 + lx, y: oy + 8 + ly };
+        }
+      }
+
+      if (part === "torso") {
+        const ox = 16;
+        const oy = layer === "inner" ? 16 : 32;
+        switch (face) {
+          case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+          case "bottom": return { x: ox + 12 + lx, y: oy + 0 + ly };
+          case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+          case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+          case "left": return { x: ox + 12 + lx, y: oy + 4 + ly };
+          case "back": return { x: ox + 16 + lx, y: oy + 4 + ly };
+        }
+      }
+
+      if (part === "right_arm") {
+        const ox = 40;
+        const oy = layer === "inner" ? 16 : 32;
+        if (!isSlim) {
+          switch (face) {
+            case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+            case "bottom": return { x: ox + 8 + lx, y: oy + 0 + ly };
+            case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+            case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+            case "left": return { x: ox + 8 + lx, y: oy + 4 + ly };
+            case "back": return { x: ox + 12 + lx, y: oy + 4 + ly };
+          }
+        } else {
+          switch (face) {
+            case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+            case "bottom": return { x: ox + 7 + lx, y: oy + 0 + ly };
+            case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+            case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+            case "left": return { x: ox + 7 + lx, y: oy + 4 + ly };
+            case "back": return { x: ox + 11 + lx, y: oy + 4 + ly };
+          }
+        }
+      }
+
+      if (part === "left_arm") {
+        const ox = layer === "inner" ? 32 : 48;
+        const oy = 48;
+        if (!isSlim) {
+          switch (face) {
+            case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+            case "bottom": return { x: ox + 8 + lx, y: oy + 0 + ly };
+            case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+            case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+            case "left": return { x: ox + 8 + lx, y: oy + 4 + ly };
+            case "back": return { x: ox + 12 + lx, y: oy + 4 + ly };
+          }
+        } else {
+          switch (face) {
+            case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+            case "bottom": return { x: ox + 7 + lx, y: oy + 0 + ly };
+            case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+            case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+            case "left": return { x: ox + 7 + lx, y: oy + 4 + ly };
+            case "back": return { x: ox + 11 + lx, y: oy + 4 + ly };
+          }
+        }
+      }
+
+      if (part === "right_leg") {
+        const ox = 0;
+        const oy = layer === "inner" ? 16 : 32;
+        switch (face) {
+          case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+          case "bottom": return { x: ox + 8 + lx, y: oy + 0 + ly };
+          case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+          case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+          case "left": return { x: ox + 8 + lx, y: oy + 4 + ly };
+          case "back": return { x: ox + 12 + lx, y: oy + 4 + ly };
+        }
+      }
+
+      if (part === "left_leg") {
+        const ox = layer === "inner" ? 16 : 0;
+        const oy = 48;
+        switch (face) {
+          case "top": return { x: ox + 4 + lx, y: oy + 0 + ly };
+          case "bottom": return { x: ox + 8 + lx, y: oy + 0 + ly };
+          case "right": return { x: ox + 0 + lx, y: oy + 4 + ly };
+          case "front": return { x: ox + 4 + lx, y: oy + 4 + ly };
+          case "left": return { x: ox + 8 + lx, y: oy + 4 + ly };
+          case "back": return { x: ox + 12 + lx, y: oy + 4 + ly };
+        }
+      }
+
+      return null;
+    }
+
+    // Noise calculation helper
+    function getNoiseColor(baseHex, range = 8) {
+      if (!baseHex) return null;
+      let r = parseInt(baseHex.slice(1, 3), 16);
+      let g = parseInt(baseHex.slice(3, 5), 16);
+      let b = parseInt(baseHex.slice(5, 7), 16);
+
+      const offset = Math.floor(Math.random() * (range * 2 + 1)) - range;
+      r = Math.max(0, Math.min(255, r + offset));
+      g = Math.max(0, Math.min(255, g + offset));
+      b = Math.max(0, Math.min(255, b + offset));
+
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+    }
+
+    // Mirroring functions for Luanti Support
+    function syncRightToLeftLimbs(skin, isSlim) {
+      let newSkin = [...skin];
+      const limbs = ["arm", "leg"];
+      const faces = ["front", "back", "top", "bottom", "left", "right"];
+      const layers = ["inner", "outer"];
+
+      limbs.forEach((limb) => {
+        const rightPart = limb === "arm" ? "right_arm" : "right_leg";
+        const leftPart = limb === "arm" ? "left_arm" : "left_leg";
+
+        layers.forEach((layer) => {
+          faces.forEach((face) => {
+            let targetFace = face;
+            if (face === "left") targetFace = "right";
+            else if (face === "right") targetFace = "left";
+
+            const dim = getFaceDimensions(rightPart, face, isSlim);
+            const targetDim = getFaceDimensions(leftPart, targetFace, isSlim);
+
+            for (let ly = 0; ly < dim.h; ly++) {
+              for (let lx = 0; lx < dim.w; lx++) {
+                const rightCoords = getGlobalCoords(rightPart, face, layer, isSlim, lx, ly);
+                if (!rightCoords) continue;
+
+                const rightColor = skin[rightCoords.y * 64 + rightCoords.x];
+
+                // Horizontal mirroring
+                const mirrorLx = targetDim.w - 1 - lx;
+                const leftCoords = getGlobalCoords(leftPart, targetFace, layer, isSlim, mirrorLx, ly);
+                if (leftCoords) {
+                  newSkin[leftCoords.y * 64 + leftCoords.x] = rightColor;
+                }
+              }
+            }
+          });
+        });
+      });
+      return newSkin;
+    }
+
+    function convertToLuantiFormat(skin, isSlim) {
+      let newSkin = syncRightToLeftLimbs(skin, isSlim);
+      const partsToClear = ["torso", "right_arm", "left_arm", "right_leg", "left_leg"];
+      const faces = ["front", "back", "left", "right", "top", "bottom"];
+
+      partsToClear.forEach((part) => {
+        faces.forEach((face) => {
+          const dim = getFaceDimensions(part, face, isSlim);
+          for (let ly = 0; ly < dim.h; ly++) {
+            for (let lx = 0; lx < dim.w; lx++) {
+              const coords = getGlobalCoords(part, face, "outer", isSlim, lx, ly);
+              if (coords) {
+                newSkin[coords.y * 64 + coords.x] = null;
+              }
+            }
+          }
+        });
+      });
+      return newSkin;
+    }
+
+    function convertToMinecraftFormat(skin, isSlim) {
+      return syncRightToLeftLimbs(skin, isSlim);
+    }
+
+    // Default Steve skin procedural builder
+    function generateBaseSkin(type) {
+      const skin = Array(4096).fill(null);
+      const isSlim = type === "alex";
+
+      // Palette definition inside
+      const colors = {
+        skin: "#EAA775",
+        hair: "#533722",
+        eyes: "#1976D2",
+        shirt: "#00BCD4",
+        pants: "#3F51B5",
+        shoes: "#424242"
+      };
+
+      const fillWithSolid = (part, face, baseHex) => {
+        const dim = getFaceDimensions(part, face, isSlim);
+        for (let ly = 0; ly < dim.h; ly++) {
+          for (let lx = 0; lx < dim.w; lx++) {
+            const coords = getGlobalCoords(part, face, "inner", isSlim, lx, ly);
+            if (coords) {
+              skin[coords.y * 64 + coords.x] = getNoiseColor(baseHex, 6);
+            }
+          }
+        }
+      };
+
+      const parts = ["head", "torso", "right_arm", "left_arm", "right_leg", "left_leg"];
+      const faces = ["front", "back", "left", "right", "top", "bottom"];
+
+      parts.forEach((part) => {
+        faces.forEach((face) => {
+          let col = colors.skin;
+          if (part === "head") {
+            col = face === "top" ? colors.hair : colors.skin;
+          } else if (part === "torso") {
+            col = colors.shirt;
+          } else if (part === "right_arm" || part === "left_arm") {
+            col = colors.shirt;
+          } else if (part === "right_leg" || part === "left_leg") {
+            col = colors.pants;
+          }
+          fillWithSolid(part, face, col);
+        });
+      });
+
+      // Special details (Head Front: Eyes and Hair)
+      // Eyeballs
+      const leftEyeCoords = getGlobalCoords("head", "front", "inner", isSlim, 2, 4);
+      if (leftEyeCoords) skin[leftEyeCoords.y * 64 + leftEyeCoords.x] = colors.eyes;
+      const rightEyeCoords = getGlobalCoords("head", "front", "inner", isSlim, 5, 4);
+      if (rightEyeCoords) skin[rightEyeCoords.y * 64 + rightEyeCoords.x] = colors.eyes;
+
+      // Eyeballs whites
+      const leftEyeWhite = getGlobalCoords("head", "front", "inner", isSlim, 1, 4);
+      if (leftEyeWhite) skin[leftEyeWhite.y * 64 + leftEyeWhite.x] = "#FFFFFF";
+      const rightEyeWhite = getGlobalCoords("head", "front", "inner", isSlim, 6, 4);
+      if (rightEyeWhite) skin[rightEyeWhite.y * 64 + rightEyeWhite.x] = "#FFFFFF";
+
+      // Hair forehead line
+      for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 2; y++) {
+          const hairCoords = getGlobalCoords("head", "front", "inner", isSlim, x, y);
+          if (hairCoords) skin[hairCoords.y * 64 + hairCoords.x] = colors.hair;
+        }
+      }
+
+      // Mouth
+      const mouthL = getGlobalCoords("head", "front", "inner", isSlim, 3, 6);
+      const mouthR = getGlobalCoords("head", "front", "inner", isSlim, 4, 6);
+      if (mouthL) skin[mouthL.y * 64 + mouthL.x] = "#9E2A2B";
+      if (mouthR) skin[mouthR.y * 64 + mouthR.x] = "#9E2A2B";
+
+      return skin;
+    }
+
+    // Save and load Undo/Redo states
+    function saveHistory() {
+      // Keep up to 20 history states
+      undoStack.push([...skinData]);
+      if (undoStack.length > 20) undoStack.shift();
+      redoStack = []; // Clear redo stack on new action
+      updateUndoRedoButtons();
+    }
+
+    function triggerUndo() {
+      if (undoStack.length === 0) return;
+      redoStack.push([...skinData]);
+      skinData = undoStack.pop();
+      updateUndoRedoButtons();
+      redrawAll();
+    }
+
+    function triggerRedo() {
+      if (redoStack.length === 0) return;
+      undoStack.push([...skinData]);
+      skinData = redoStack.pop();
+      updateUndoRedoButtons();
+      redrawAll();
+    }
+
+    function updateUndoRedoButtons() {
+      const btnUndo = document.getElementById("btn-undo");
+      const btnRedo = document.getElementById("btn-redo");
+      
+      btnUndo.disabled = undoStack.length === 0;
+      btnRedo.disabled = redoStack.length === 0;
+    }
+
+
+    // --- 2D CANVAS DRAWING MANAGER ---
+    const canvas = document.getElementById("drawing-canvas");
+    const ctx = canvas.getContext("2d");
+    let isDrawing = false;
+
+    function getCanvasCoordinates(e) {
+      const rect = canvas.getBoundingClientRect();
+      // Mouse or Touch support
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const lx = Math.floor(((clientX - rect.left) / rect.width) * faceDim.w);
+      const ly = Math.floor(((clientY - rect.top) / rect.height) * faceDim.h);
+      return { lx, ly };
+    }
+
+    let faceDim = { w: 8, h: 8 };
+
+    function redraw2DCanvas() {
+      const isSlim = skinType === "alex";
+      faceDim = getFaceDimensions(activePart, activeFace, isSlim);
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = false;
+
+      const cellW = canvas.width / faceDim.w;
+      const cellH = canvas.height / faceDim.h;
+
+      // Draw active body part face pixels
+      for (let ly = 0; ly < faceDim.h; ly++) {
+        for (let lx = 0; lx < faceDim.w; lx++) {
+          const coords = getGlobalCoords(activePart, activeFace, activeLayer, isSlim, lx, ly);
+          if (coords) {
+            const idx = coords.y * 64 + coords.x;
+            const color = skinData[idx];
+            if (color) {
+              ctx.fillStyle = color;
+              ctx.fillRect(lx * cellW, ly * cellH, cellW, cellH);
+            } else {
+              // Checkerboard pattern for transparent cells
+              ctx.fillStyle = (lx + ly) % 2 === 0 ? "#F3F4F6" : "#E5E7EB";
+              ctx.fillRect(lx * cellW, ly * cellH, cellW, cellH);
+            }
+          }
+        }
+      }
+
+      // Draw grid borders
+      ctx.strokeStyle = "rgba(0,0,0,0.1)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= faceDim.w; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * cellW, 0);
+        ctx.lineTo(i * cellW, canvas.height);
+        ctx.stroke();
+      }
+      for (let j = 0; j <= faceDim.h; j++) {
+        ctx.beginPath();
+        ctx.moveTo(0, j * cellH);
+        ctx.lineTo(canvas.width, j * cellH);
+        ctx.stroke();
+      }
+
+      // Update Header Text
+      document.getElementById("canvas-title").innerText = `${partLabels[activePart]} - ${faceLabels[activeFace]} (${faceDim.w} x ${faceDim.h})`;
+    }
+
+    function applyDrawingTool(lx, ly) {
+      if (lx < 0 || lx >= faceDim.w || ly < 0 || ly >= faceDim.h) return;
+      const isSlim = skinType === "alex";
+      const coords = getGlobalCoords(activePart, activeFace, activeLayer, isSlim, lx, ly);
+      if (!coords) return;
+
+      const idx = coords.y * 64 + coords.x;
+      const prevColor = skinData[idx];
+
+      if (activeTool === "dropper") {
+        if (prevColor) {
+          updateColorSelection(prevColor);
+          selectTool("pencil");
+        }
+        return;
+      }
+
+      let nextColor = null;
+      if (activeTool === "pencil") {
+        nextColor = currentColor;
+      } else if (activeTool === "noise") {
+        nextColor = getNoiseColor(currentColor, 8);
+      } else if (activeTool === "eraser") {
+        nextColor = null;
+      } else if (activeTool === "bucket") {
+        // Flood fill logic
+        floodFill(lx, ly, currentColor);
+        return;
+      }
+
+      if (skinData[idx] !== nextColor) {
+        skinData[idx] = nextColor;
+        
+        // Luanti automatically mirrors changes from right limb to left limb
+        if (skinFormat === "luanti") {
+          skinData = syncRightToLeftLimbs(skinData, isSlim);
+        }
+
+        redraw2DCanvas();
+        updateThreeTexture();
+      }
+    }
+
+    function floodFill(startX, startY, targetColor) {
+      const isSlim = skinType === "alex";
+      const startingCoords = getGlobalCoords(activePart, activeFace, activeLayer, isSlim, startX, startY);
+      if (!startingCoords) return;
+
+      const startIdx = startingCoords.y * 64 + startingCoords.x;
+      const colorToReplace = skinData[startIdx];
+      if (colorToReplace === targetColor) return;
+
+      const queue = [[startX, startY]];
+      const visited = new Set();
+
+      while (queue.length > 0) {
+        const [cx, cy] = queue.shift();
+        const key = `${cx},${cy}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        const currentCoords = getGlobalCoords(activePart, activeFace, activeLayer, isSlim, cx, cy);
+        if (!currentCoords) continue;
+
+        const idx = currentCoords.y * 64 + currentCoords.x;
+        if (skinData[idx] === colorToReplace) {
+          skinData[idx] = targetColor;
+
+          // Push neighbors
+          if (cx > 0) queue.push([cx - 1, cy]);
+          if (cx < faceDim.w - 1) queue.push([cx + 1, cy]);
+          if (cy > 0) queue.push([cx, cy - 1]);
+          if (cy < faceDim.h - 1) queue.push([cx, cy + 1]);
+        }
+      }
+
+      if (skinFormat === "luanti") {
+        skinData = syncRightToLeftLimbs(skinData, isSlim);
+      }
+
+      redraw2DCanvas();
+      updateThreeTexture();
+    }
+
+
+    // --- THREE.JS 3D SKIN PREVIEW ENGINE ---
+    let scene, camera, renderer;
+    let mainModelGroup = new THREE.Group();
+    let bodyParts3D = {};
+    let activeAnimation = "walk";
+    let isPlayingAnim = true;
+    let materialsMap = {};
+
+    function init3DPreview() {
+      const container = document.getElementById("three-container");
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color("#0F172A");
+
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+      camera.position.set(0, 2, 28);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.shadowMap.enabled = true;
+      container.appendChild(renderer.domElement);
+
+      // Lightings
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+      scene.add(ambientLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.45);
+      dirLight1.position.set(10, 20, 15);
+      scene.add(dirLight1);
+
+      const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.25);
+      dirLight2.position.set(-10, 5, -15);
+      scene.add(dirLight2);
+
+      scene.add(mainModelGroup);
+
+      // Build initial voxel meshes
+      reconstruct3DModel();
+
+      // Interactions
+      let isDraggingCam = false;
+      let previousMousePosition = { x: 0, y: 0 };
+
+      container.addEventListener("mousedown", (e) => {
+        isDraggingCam = true;
+      });
+
+      container.addEventListener("mousemove", (e) => {
+        const deltaMove = {
+          x: e.clientX - previousMousePosition.x,
+          y: e.clientY - previousMousePosition.y
+        };
+
+        if (isDraggingCam) {
+          mainModelGroup.rotation.y += deltaMove.x * 0.012;
+          mainModelGroup.rotation.x += deltaMove.y * 0.012;
+          // Clamp pitching
+          mainModelGroup.rotation.x = Math.max(-Math.PI/3, Math.min(Math.PI/3, mainModelGroup.rotation.x));
+        }
+
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener("mouseup", () => {
+        isDraggingCam = false;
+      });
+
+      // Mouse wheel zoom
+      container.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        camera.position.z += e.deltaY * 0.03;
+        camera.position.z = Math.max(10, Math.min(60, camera.position.z));
+      });
+
+      // Window resize
+      window.addEventListener("resize", () => {
+        if (!container || !renderer) return;
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+
+      // Start loop
+      animate3D();
+    }
+
+    function createMinecraftPartMesh(part, layer) {
+      const isSlim = skinType === "alex";
+      const dims = { ...PART_DIMENSIONS[part] };
+      if (isSlim && (part === "right_arm" || part === "left_arm")) {
+        dims.width = 3;
+      }
+
+      // Outer layers are 10% larger than inner ones
+      const scaleFactor = layer === "outer" ? 1.07 : 1.0;
+      const geometry = new THREE.BoxGeometry(dims.width, dims.height, dims.depth);
+
+      // We need 6 individual canvas textures per cube (one for each face)
+      const facesOrder = ["right", "left", "top", "bottom", "front", "back"];
+      const materials = [];
+
+      facesOrder.forEach((face) => {
+        const canvasFace = document.createElement("canvas");
+        const faceW = face === "top" || face === "bottom" ? dims.width : dims.depth;
+        const faceH = face === "top" || face === "bottom" ? dims.depth : dims.height;
+        
+        canvasFace.width = faceW * 8;
+        canvasFace.height = faceH * 8;
+        const faceCtx = canvasFace.getContext("2d");
+        faceCtx.imageSmoothingEnabled = false;
+
+        // Render face texture
+        for (let ly = 0; ly < faceH; ly++) {
+          for (let lx = 0; lx < faceW; lx++) {
+            let srcPart = part;
+            let srcFace = face;
+            let srcLx = lx;
+
+            // Luanti mirror logic
+            if (skinFormat === "luanti" && (part === "left_arm" || part === "left_leg")) {
+              srcPart = part === "left_arm" ? "right_arm" : "right_leg";
+              if (face === "left") srcFace = "right";
+              else if (face === "right") srcFace = "left";
+
+              const srcDim = getFaceDimensions(srcPart, srcFace, isSlim);
+              srcLx = srcDim.w - 1 - lx;
+            }
+
+            const coords = getGlobalCoords(srcPart, srcFace, layer, isSlim, srcLx, ly);
+            if (coords) {
+              const idx = coords.y * 64 + coords.x;
+              const color = skinData[idx];
+              if (color) {
+                faceCtx.fillStyle = color;
+                faceCtx.fillRect(lx * 8, ly * 8, 8, 8);
+              }
+            }
+          }
+        }
+
+        const texture = new THREE.CanvasTexture(canvasFace);
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+
+        const materialConfig = {
+          map: texture,
+          transparent: true,
+          roughness: 0.8,
+          metalness: 0.1,
+          side: THREE.DoubleSide
+        };
+
+        materials.push(new THREE.MeshStandardMaterial(materialConfig));
+      });
+
+      const mesh = new THREE.Mesh(geometry, materials);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      // Keep texture reference for updating later
+      const key = `${part}_${layer}`;
+      materialsMap[key] = materials;
+
+      return mesh;
+    }
+
+    function reconstruct3DModel() {
+      // Clear previous
+      while (mainModelGroup.children.length > 0) {
+        mainModelGroup.remove(mainModelGroup.children[0]);
+      }
+      bodyParts3D = {};
+      materialsMap = {};
+
+      const isSlim = skinType === "alex";
+
+      // 1. Head Group
+      const headGroup = new THREE.Group();
+      const headInner = createMinecraftPartMesh("head", "inner");
+      headGroup.add(headInner);
+      
+      if (showOuterLayer) {
+        const headOuter = createMinecraftPartMesh("head", "outer");
+        headGroup.add(headOuter);
+      }
+      headGroup.position.y = 12 / 2 + 8 / 2; // Above torso
+      bodyParts3D.head = headGroup;
+      mainModelGroup.add(headGroup);
+
+      // 2. Torso Mesh
+      const torsoGroup = new THREE.Group();
+      const torsoInner = createMinecraftPartMesh("torso", "inner");
+      torsoGroup.add(torsoInner);
+
+      if (showOuterLayer && skinFormat !== "luanti") {
+        const torsoOuter = createMinecraftPartMesh("torso", "outer");
+        torsoGroup.add(torsoOuter);
+      }
+      bodyParts3D.torso = torsoGroup;
+      mainModelGroup.add(torsoGroup);
+
+      // 3. Left Arm Group (pivot is at top center of arm)
+      const leftArmGroup = new THREE.Group();
+      const leftArmInner = createMinecraftPartMesh("left_arm", "inner");
+      leftArmInner.position.y = -6; // Pivot at top
+      leftArmGroup.add(leftArmInner);
+
+      if (showOuterLayer && skinFormat !== "luanti") {
+        const leftArmOuter = createMinecraftPartMesh("left_arm", "outer");
+        leftArmOuter.position.y = -6;
+        leftArmGroup.add(leftArmOuter);
+      }
+      const offsetArmX = isSlim ? 5.5 : 6;
+      leftArmGroup.position.set(offsetArmX, 6, 0); // Position at top-left of torso
+      bodyParts3D.leftArm = leftArmGroup;
+      mainModelGroup.add(leftArmGroup);
+
+      // 4. Right Arm Group
+      const rightArmGroup = new THREE.Group();
+      const rightArmInner = createMinecraftPartMesh("right_arm", "inner");
+      rightArmInner.position.y = -6;
+      rightArmGroup.add(rightArmInner);
+
+      if (showOuterLayer && skinFormat !== "luanti") {
+        const rightArmOuter = createMinecraftPartMesh("right_arm", "outer");
+        rightArmOuter.position.y = -6;
+        rightArmGroup.add(rightArmOuter);
+      }
+      rightArmGroup.position.set(-offsetArmX, 6, 0);
+      bodyParts3D.rightArm = rightArmGroup;
+      mainModelGroup.add(rightArmGroup);
+
+      // 5. Left Leg Group
+      const leftLegGroup = new THREE.Group();
+      const leftLegInner = createMinecraftPartMesh("left_leg", "inner");
+      leftLegInner.position.y = -6;
+      leftLegGroup.add(leftLegInner);
+
+      if (showOuterLayer && skinFormat !== "luanti") {
+        const leftLegOuter = createMinecraftPartMesh("left_leg", "outer");
+        leftLegOuter.position.y = -6;
+        leftLegGroup.add(leftLegOuter);
+      }
+      leftLegGroup.position.set(2, -6, 0);
+      bodyParts3D.leftLeg = leftLegGroup;
+      mainModelGroup.add(leftLegGroup);
+
+      // 6. Right Leg Group
+      const rightLegGroup = new THREE.Group();
+      const rightLegInner = createMinecraftPartMesh("right_leg", "inner");
+      rightLegInner.position.y = -6;
+      rightLegGroup.add(rightLegInner);
+
+      if (showOuterLayer && skinFormat !== "luanti") {
+        const rightLegOuter = createMinecraftPartMesh("right_leg", "outer");
+        rightLegOuter.position.y = -6;
+        rightLegGroup.add(rightLegOuter);
+      }
+      rightLegGroup.position.set(-2, -6, 0);
+      bodyParts3D.rightLeg = rightLegGroup;
+      mainModelGroup.add(rightLegGroup);
+    }
+
+    function updateThreeTexture() {
+      // Re-renders the canvas images inside Three materials dynamically
+      // to avoid fully reconstructing the scene on every single pixel edit.
+      const parts = ["head", "torso", "right_arm", "left_arm", "right_leg", "left_leg"];
+      const layers = ["inner", "outer"];
+      const facesOrder = ["right", "left", "top", "bottom", "front", "back"];
+      const isSlim = skinType === "alex";
+
+      parts.forEach((part) => {
+        layers.forEach((layer) => {
+          const key = `${part}_${layer}`;
+          const materials = materialsMap[key];
+          if (!materials) return;
+
+          const dims = { ...PART_DIMENSIONS[part] };
+          if (isSlim && (part === "right_arm" || part === "left_arm")) {
+            dims.width = 3;
+          }
+
+          facesOrder.forEach((face, fIdx) => {
+            const material = materials[fIdx];
+            if (!material || !material.map) return;
+
+            const canvasFace = material.map.image;
+            if (!canvasFace) return;
+
+            const faceW = face === "top" || face === "bottom" ? dims.width : dims.depth;
+            const faceH = face === "top" || face === "bottom" ? dims.depth : dims.height;
+            const faceCtx = canvasFace.getContext("2d");
+            
+            faceCtx.clearRect(0, 0, canvasFace.width, canvasFace.height);
+
+            // Luanti disables outer layer everywhere except Head.
+            if (skinFormat === "luanti" && part !== "head" && layer === "outer") {
+              material.map.needsUpdate = true;
+              return;
+            }
+
+            for (let ly = 0; ly < faceH; ly++) {
+              for (let lx = 0; lx < faceW; lx++) {
+                let srcPart = part;
+                let srcFace = face;
+                let srcLx = lx;
+
+                // Luanti mirrors left arm/leg from right arm/leg
+                if (skinFormat === "luanti" && (part === "left_arm" || part === "left_leg")) {
+                  srcPart = part === "left_arm" ? "right_arm" : "right_leg";
+                  if (face === "left") srcFace = "right";
+                  else if (face === "right") srcFace = "left";
+
+                  const srcDim = getFaceDimensions(srcPart, srcFace, isSlim);
+                  srcLx = srcDim.w - 1 - lx;
+                }
+
+                const coords = getGlobalCoords(srcPart, srcFace, layer, isSlim, srcLx, ly);
+                if (coords) {
+                  const idx = coords.y * 64 + coords.x;
+                  const color = skinData[idx];
+                  if (color) {
+                    faceCtx.fillStyle = color;
+                    faceCtx.fillRect(lx * 8, ly * 8, 8, 8);
+                  }
+                }
+              }
+            }
+            material.map.needsUpdate = true;
+          });
+        });
+      });
+    }
+
+    let clock = new THREE.Clock();
+
+    function animate3D() {
+      requestAnimationFrame(animate3D);
+
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      // Animations math
+      if (isPlayingAnim && Object.keys(bodyParts3D).length > 0) {
+        const speed = activeAnimation === "run" ? 14 : 7;
+        const angle = Math.sin(time * speed) * 0.55;
+
+        switch (activeAnimation) {
+          case "walk":
+          case "run":
+            // Arms and legs moves in opposite phases
+            bodyParts3D.leftArm.rotation.x = -angle;
+            bodyParts3D.rightArm.rotation.x = angle;
+            bodyParts3D.leftLeg.rotation.x = angle;
+            bodyParts3D.rightLeg.rotation.x = -angle;
+            // Clear other axis
+            bodyParts3D.leftArm.rotation.z = 0.05;
+            bodyParts3D.rightArm.rotation.z = -0.05;
+            bodyParts3D.head.rotation.y = Math.sin(time * 2) * 0.08;
+            bodyParts3D.head.rotation.x = (Math.cos(time * 4) * 0.03) + 0.05;
+            break;
+
+          case "wave":
+            bodyParts3D.rightArm.rotation.x = -Math.PI + 0.2;
+            bodyParts3D.rightArm.rotation.z = Math.sin(time * 12) * 0.35 - 0.2;
+            bodyParts3D.leftArm.rotation.x = Math.sin(time * 2) * 0.1;
+            bodyParts3D.leftArm.rotation.z = 0.05;
+            bodyParts3D.leftLeg.rotation.x = 0;
+            bodyParts3D.rightLeg.rotation.x = 0;
+            bodyParts3D.head.rotation.y = Math.sin(time * 4) * 0.12;
+            break;
+
+          case "stand":
+          default:
+            bodyParts3D.leftArm.rotation.x = 0;
+            bodyParts3D.rightArm.rotation.x = 0;
+            bodyParts3D.leftArm.rotation.z = 0.05;
+            bodyParts3D.rightArm.rotation.z = -0.05;
+            bodyParts3D.leftLeg.rotation.x = 0;
+            bodyParts3D.rightLeg.rotation.x = 0;
+            bodyParts3D.head.rotation.y = Math.sin(time * 1) * 0.04;
+            bodyParts3D.head.rotation.x = 0;
+            break;
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+
+    // --- COLOR PALETTE AND PRESETS LOADER ---
+    function updateColorSelection(hex) {
+      currentColor = hex.toUpperCase();
+      document.getElementById("input-color-picker").value = currentColor;
+      document.getElementById("hex-color-input").value = currentColor;
+      document.getElementById("color-preview-box").style.backgroundColor = currentColor;
+    }
+
+    function addRecentColor(hex) {
+      if (recentColors.includes(hex)) return;
+      recentColors.unshift(hex);
+      if (recentColors.length > 12) recentColors.pop();
+      renderRecentColors();
+    }
+
+    function renderRecentColors() {
+      const container = document.getElementById("recent-palette-colors");
+      container.innerHTML = "";
+      recentColors.forEach((color) => {
+        const div = document.createElement("div");
+        div.className = "w-full aspect-square border border-zinc-400 cursor-pointer hover:scale-105 transition-all shadow-sm";
+        div.style.backgroundColor = color;
+        div.addEventListener("click", () => updateColorSelection(color));
+        container.appendChild(div);
+      });
+    }
+
+    function renderPresetPalette(paletteName) {
+      const colors = PRESET_PALETTES[paletteName];
+      const container = document.getElementById("preset-palette-colors");
+      container.innerHTML = "";
+      colors.forEach((color) => {
+        const div = document.createElement("div");
+        div.className = "w-full aspect-square border border-zinc-400 cursor-pointer hover:scale-105 transition-all shadow-sm";
+        div.style.backgroundColor = color;
+        div.addEventListener("click", () => updateColorSelection(color));
+        container.appendChild(div);
+      });
+    }
+
+
+    // --- EVENT LISTENERS & INITIALIZATION ---
+    window.addEventListener("DOMContentLoaded", () => {
+      // Re-initialize Lucide Icons
+      lucide.createIcons();
+
+      // Build default Steve base skin
+      skinData = generateBaseSkin("steve");
+
+      // Load Color presets
+      renderPresetPalette("steve");
+      renderRecentColors();
+
+      // Setup 3D Viewport
+      init3DPreview();
+
+      // Draw initial grid
+      redraw2DCanvas();
+
+      // Tool selection listeners
+      document.querySelectorAll("#tool-selector button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectTool(btn.dataset.tool);
+        });
+      });
+
+      // Part selection triggers
+      document.querySelectorAll("#part-selector-list button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectPart(btn.dataset.part);
+        });
+      });
+
+      // Face selection triggers
+      document.querySelectorAll("#face-selector-grid button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectFace(btn.dataset.face);
+        });
+      });
+
+      // Layer Selection
+      document.getElementById("layer-inner").addEventListener("click", () => selectLayer("inner"));
+      document.getElementById("layer-outer").addEventListener("click", () => selectLayer("outer"));
+
+      // Formats switches
+      document.getElementById("format-minecraft").addEventListener("click", () => selectFormat("minecraft"));
+      document.getElementById("format-luanti").addEventListener("click", () => selectFormat("luanti"));
+
+      // Model switches
+      document.getElementById("model-steve").addEventListener("click", () => selectModelStyle("steve"));
+      document.getElementById("model-alex").addEventListener("click", () => selectModelStyle("alex"));
+
+      // Color picker
+      document.getElementById("input-color-picker").addEventListener("input", (e) => {
+        updateColorSelection(e.target.value);
+      });
+      document.getElementById("hex-color-input").addEventListener("change", (e) => {
+        let hex = e.target.value;
+        if (!hex.startsWith("#")) hex = "#" + hex;
+        if (/^#[0-9A-F]{6}$/i.test(hex)) {
+          updateColorSelection(hex);
+        } else {
+          e.target.value = currentColor;
+        }
+      });
+
+      // Preset palette selects
+      document.getElementById("preset-palette-select").addEventListener("change", (e) => {
+        renderPresetPalette(e.target.value);
+      });
+
+      // Canvas Draw Events
+      canvas.addEventListener("mousedown", (e) => {
+        if (activeTool === "dropper") {
+          const { lx, ly } = getCanvasCoordinates(e);
+          applyDrawingTool(lx, ly);
+          return;
+        }
+        isDrawing = true;
+        saveHistory(); // Save snapshot before drawing
+        const { lx, ly } = getCanvasCoordinates(e);
+        applyDrawingTool(lx, ly);
+      });
+
+      canvas.addEventListener("mousemove", (e) => {
+        if (!isDrawing) return;
+        const { lx, ly } = getCanvasCoordinates(e);
+        applyDrawingTool(lx, ly);
+      });
+
+      window.addEventListener("mouseup", () => {
+        isDrawing = false;
+      });
+
+      // Touch screen support
+      canvas.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        isDrawing = true;
+        saveHistory();
+        const { lx, ly } = getCanvasCoordinates(e);
+        applyDrawingTool(lx, ly);
+      });
+      canvas.addEventListener("touchmove", (e) => {
+        e.preventDefault();
+        if (!isDrawing) return;
+        const { lx, ly } = getCanvasCoordinates(e);
+        applyDrawingTool(lx, ly);
+      });
+      canvas.addEventListener("touchend", () => {
+        isDrawing = false;
+      });
+
+      // Undo/Redo key bindings and buttons
+      document.getElementById("btn-undo").addEventListener("click", triggerUndo);
+      document.getElementById("btn-redo").addEventListener("click", triggerRedo);
+      window.addEventListener("keydown", (e) => {
+        if (e.ctrlKey && e.key.toLowerCase() === "z") {
+          e.preventDefault();
+          triggerUndo();
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === "y") {
+          e.preventDefault();
+          triggerRedo();
+        }
+      });
+
+      // Quick Clear Operations
+      document.getElementById("btn-clear-face").addEventListener("click", () => {
+        saveHistory();
+        clearCurrentFace();
+      });
+      document.getElementById("btn-fill-all").addEventListener("click", () => {
+        saveHistory();
+        fillCurrentFace(currentColor);
+      });
+      document.getElementById("btn-clear-all").addEventListener("click", () => {
+        saveHistory();
+        fillCurrentFace(null);
+      });
+
+      // Toggle outer visibility
+      document.getElementById("toggle-outer").addEventListener("change", (e) => {
+        showOuterLayer = e.target.checked;
+        reconstruct3DModel();
+      });
+
+      // Reset camera
+      document.getElementById("btn-reset-cam").addEventListener("click", () => {
+        mainModelGroup.rotation.set(0,0,0);
+        camera.position.set(0, 2, 28);
+      });
+
+      // Animation Play/Pause
+      const btnPlayPause = document.getElementById("btn-play-pause");
+      btnPlayPause.addEventListener("click", () => {
+        isPlayingAnim = !isPlayingAnim;
+        const icon = btnPlayPause.querySelector("i");
+        if (isPlayingAnim) {
+          icon.setAttribute("data-lucide", "pause");
+        } else {
+          icon.setAttribute("data-lucide", "play");
+        }
+        lucide.createIcons();
+      });
+
+      // Anim selector
+      document.getElementById("select-anim").addEventListener("change", (e) => {
+        activeAnimation = e.target.value;
+      });
+
+      // Export PNG click
+      document.getElementById("btn-export-png").addEventListener("click", exportPNGSkin);
+
+      // Import PNG setups
+      const fileInput = document.getElementById("import-file");
+      const dropZone = document.getElementById("drop-zone");
+
+      dropZone.addEventListener("click", () => fileInput.click());
+      
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("border-orange-500", "bg-orange-50/20");
+      });
+
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("border-orange-500", "bg-orange-50/20");
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-orange-500", "bg-orange-50/20");
+        const file = e.dataTransfer.files[0];
+        if (file) handleFileImport(file);
+      });
+
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) handleFileImport(file);
+      });
+    });
+
+    // --- WORKSPACE CORE CONTROLLER STATE UPDATERS ---
+    function selectTool(tool) {
+      activeTool = tool;
+      document.querySelectorAll("#tool-selector button").forEach((btn) => {
+        if (btn.dataset.tool === tool) {
+          btn.classList.add("bg-orange-500", "text-white", "border-zinc-800");
+          btn.classList.remove("border-transparent", "text-zinc-600");
+        } else {
+          btn.classList.remove("bg-orange-500", "text-white", "border-zinc-800");
+          btn.classList.add("border-transparent", "text-zinc-600");
+        }
+      });
+    }
+
+    function selectPart(part) {
+      activePart = part;
+      document.querySelectorAll("#part-selector-list button").forEach((btn) => {
+        if (btn.dataset.part === part) {
+          btn.classList.add("bg-orange-500", "text-white", "border-zinc-800");
+          btn.classList.remove("border-transparent", "hover:bg-zinc-100");
+        } else {
+          btn.classList.remove("bg-orange-500", "text-white", "border-zinc-800");
+          btn.classList.add("border-transparent", "hover:bg-zinc-100");
+        }
+      });
+      redraw2DCanvas();
+    }
+
+    function selectFace(face) {
+      activeFace = face;
+      document.querySelectorAll("#face-selector-grid button").forEach((btn) => {
+        if (btn.dataset.face === face) {
+          btn.classList.add("bg-zinc-200", "text-zinc-800", "border-zinc-800", "font-bold");
+          btn.classList.remove("border-transparent", "hover:bg-zinc-100");
+        } else {
+          btn.classList.remove("bg-zinc-200", "text-zinc-800", "border-zinc-800", "font-bold");
+          btn.classList.add("border-transparent", "hover:bg-zinc-100");
+        }
+      });
+      redraw2DCanvas();
+    }
+
+    function selectLayer(layer) {
+      activeLayer = layer;
+      const btnInner = document.getElementById("layer-inner");
+      const btnOuter = document.getElementById("layer-outer");
+
+      if (layer === "inner") {
+        btnInner.className = "py-1.5 px-2 text-xs font-bold border-2 border-zinc-800 bg-zinc-800 text-white cursor-pointer";
+        btnOuter.className = "py-1.5 px-2 text-xs font-bold border-2 border-zinc-300 bg-white text-zinc-600 hover:border-zinc-800 cursor-pointer";
+      } else {
+        btnOuter.className = "py-1.5 px-2 text-xs font-bold border-2 border-zinc-800 bg-zinc-800 text-white cursor-pointer";
+        btnInner.className = "py-1.5 px-2 text-xs font-bold border-2 border-zinc-300 bg-white text-zinc-600 hover:border-zinc-800 cursor-pointer";
+      }
+      redraw2DCanvas();
+    }
+
+    function selectFormat(format) {
+      skinFormat = format;
+      const btnMc = document.getElementById("format-minecraft");
+      const btnLt = document.getElementById("format-luanti");
+      const hint = document.getElementById("format-hint");
+      const desc = document.getElementById("export-desc");
+
+      const armLeftBtn = document.getElementById("part-btn-left-arm");
+      const legLeftBtn = document.getElementById("part-btn-left-leg");
+
+      if (format === "minecraft") {
+        btnMc.className = "px-3 py-1 text-xs font-bold transition-all bg-orange-500 text-white";
+        btnLt.className = "px-3 py-1 text-xs font-bold transition-all text-zinc-600 hover:text-zinc-800";
+        hint.innerText = "Minecraft 1.8+ 互換：重ね着レイヤーを含むすべての面を個別に描画・編集可能です。";
+        desc.innerText = "Minecraft (64x64) 形式で保存されます。全ての重ね着レイヤーが保存され、標準のMinecraftでそのまま使用可能です。";
+        
+        // Restore standard left side selectors
+        armLeftBtn.style.display = "flex";
+        legLeftBtn.style.display = "flex";
+        document.getElementById("label-right-arm").innerText = "右腕 (Right Arm)";
+        document.getElementById("label-right-leg").innerText = "右足 (Right Leg)";
+      } else {
+        btnLt.className = "px-3 py-1 text-xs font-bold transition-all bg-orange-500 text-white";
+        btnMc.className = "px-3 py-1 text-xs font-bold transition-all text-zinc-600 hover:text-zinc-800";
+        hint.innerText = "Luanti / Minetest (64x32) 互換：腕・足のテクスチャを片方から自動ミラーコピーします。アウターは頭部(Hat)のみサポート。";
+        desc.innerText = "Luanti (64x32) 形式のクラシックスキンPNGとして書き出されます。左側の手足は右側から自動ミラーマッピングされます。";
+
+        // Hide left side selectors in Luanti mode to avoid confusion
+        armLeftBtn.style.display = "none";
+        legLeftBtn.style.display = "none";
+        document.getElementById("label-right-arm").innerText = "両腕 (Arms)";
+        document.getElementById("label-right-leg").innerText = "両足 (Legs)";
+
+        // Redirect if active selection was left arm/leg
+        if (activePart === "left_arm") selectPart("right_arm");
+        if (activePart === "left_leg") selectPart("right_leg");
+
+        // Convert the current skin values
+        const isSlim = skinType === "alex";
+        skinData = convertToLuantiFormat(skinData, isSlim);
+      }
+
+      redrawAll();
+    }
+
+    function selectModelStyle(model) {
+      skinType = model;
+      const btnSteve = document.getElementById("model-steve");
+      const btnAlex = document.getElementById("model-alex");
+
+      if (model === "steve") {
+        btnSteve.className = "px-3 py-1 text-xs font-bold transition-all bg-zinc-800 text-white";
+        btnAlex.className = "px-3 py-1 text-xs font-bold transition-all text-zinc-600 hover:text-zinc-800";
+      } else {
+        btnAlex.className = "px-3 py-1 text-xs font-bold transition-all bg-zinc-800 text-white";
+        btnSteve.className = "px-3 py-1 text-xs font-bold transition-all text-zinc-600 hover:text-zinc-800";
+      }
+
+      // Convert format limits
+      if (skinFormat === "luanti") {
+        skinData = convertToLuantiFormat(skinData, skinType === "alex");
+      } else {
+        skinData = convertToMinecraftFormat(skinData, skinType === "alex");
+      }
+
+      redrawAll();
+    }
+
+    function clearCurrentFace() {
+      const isSlim = skinType === "alex";
+      for (let ly = 0; ly < faceDim.h; ly++) {
+        for (let lx = 0; lx < faceDim.w; lx++) {
+          const coords = getGlobalCoords(activePart, activeFace, activeLayer, isSlim, lx, ly);
+          if (coords) {
+            skinData[coords.y * 64 + coords.x] = null;
+          }
+        }
+      }
+
+      if (skinFormat === "luanti") {
+        skinData = syncRightToLeftLimbs(skinData, isSlim);
+      }
+
+      redraw2DCanvas();
+      updateThreeTexture();
+    }
+
+    function fillCurrentFace(color) {
+      const isSlim = skinType === "alex";
+      for (let ly = 0; ly < faceDim.h; ly++) {
+        for (let lx = 0; lx < faceDim.w; lx++) {
+          const coords = getGlobalCoords(activePart, activeFace, activeLayer, isSlim, lx, ly);
+          if (coords) {
+            skinData[coords.y * 64 + coords.x] = color;
+          }
+        }
+      }
+
+      if (skinFormat === "luanti") {
+        skinData = syncRightToLeftLimbs(skinData, isSlim);
+      }
+
+      redraw2DCanvas();
+      updateThreeTexture();
+    }
+
+    function redrawAll() {
+      redraw2DCanvas();
+      reconstruct3DModel();
+    }
+
+
+    // --- FILE OPERATIONS: PNG DOWNLOAD / EXPORT & UPLOAD / IMPORT ---
+    function exportPNGSkin() {
+      const isLuanti = skinFormat === "luanti";
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = 64;
+      exportCanvas.height = isLuanti ? 32 : 64;
+      const exportCtx = exportCanvas.getContext("2d");
+
+      // Set pixels
+      for (let y = 0; y < exportCanvas.height; y++) {
+        for (let x = 0; x < 64; x++) {
+          const color = skinData[y * 64 + x];
+          if (color) {
+            exportCtx.fillStyle = color;
+            exportCtx.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+
+      const link = document.createElement("a");
+      link.download = isLuanti ? "luanti_standalone_skin.png" : "minecraft_standalone_skin.png";
+      link.href = exportCanvas.toDataURL("image/png");
+      link.click();
+    }
+
+    function handleFileImport(file) {
+      if (!file.type.startsWith("image/")) {
+        alert("エラー: PNG画像ファイルを選択してください。");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          if (img.width !== 64 || (img.height !== 64 && img.height !== 32)) {
+            alert("エラー: 有効なスキンファイル（64x64 または 64x32ピクセル）を選択してください。");
+            return;
+          }
+
+          const isLuantiOrLegacy = img.height === 32;
+
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = 64;
+          tempCanvas.height = 64;
+          const tempCtx = tempCanvas.getContext("2d");
+          tempCtx.drawImage(img, 0, 0);
+
+          const imgData = tempCtx.getImageData(0, 0, 64, 64);
+          const importedSkin = Array(4096).fill(null);
+
+          for (let y = 0; y < 64; y++) {
+            for (let x = 0; x < 64; x++) {
+              const i = (y * 64 + x) * 4;
+              const r = imgData.data[i];
+              const g = imgData.data[i+1];
+              const b = imgData.data[i+2];
+              const a = imgData.data[i+3];
+
+              if (a > 10) { // Alpha threshold
+                const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+                importedSkin[y * 64 + x] = hex;
+              }
+            }
+          }
+
+          saveHistory();
+
+          if (isLuantiOrLegacy) {
+            selectFormat("luanti");
+            skinData = convertToMinecraftFormat(importedSkin, skinType === "alex");
+          } else {
+            selectFormat("minecraft");
+            skinData = importedSkin;
+          }
+
+          redrawAll();
+          alert(`インポート成功: ${isLuantiOrLegacy ? "64x32 (Luanti/旧形式)" : "64x64 (Minecraft形式)"} のスキンを読み込みました！`);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  </script>
+</body>
+</html>
